@@ -29,7 +29,7 @@ You are free to use any AI tools you'd like. What matters is the end result.
 2. Implement your solution.
 3. Deploy your solution to the web (GitHub Pages, Firebase Hosting, or any hosting).
 4. Update this README with:
-   - A list of the UX issues you identified and fixed.
+   - A list of the UX issues you identified and fixed. ✅
    - Your deployed URL.
    - A screen recording demonstrating each fix.
 5. Add **IMan-admin** as a collaborator to your private repo.
@@ -42,3 +42,30 @@ You are free to use any AI tools you'd like. What matters is the end result.
 - Does returning to bottom resume auto-scroll?
 - Is the code clean, testable, and well-separated?
 - Are edge cases handled?
+
+## UX Issues Identified and Fixed
+
+### 1. **No auto-scroll during token streaming**
+
+- **Issue**: The chat list only auto-scrolled when a new message was **inserted**, not when it was updated. Since the AI response streams as a single `TextStreamMessage` that updates in-place, the user had to manually scroll to see new tokens arriving.
+- **Fix**: Integrated `ChatAutoScrollManager` to detect every chunk update and trigger a smooth `animateTo(maxScrollExtent)` scroll in a post-frame callback, keeping the latest content visible as it streams in.
+
+### 2. **No pause when user manually scrolls away**
+
+- **Issue**: Even if auto-scroll existed, there was no mechanism to detect when the user scrolled up during streaming to suppress the auto-scroll. The list would fight the user's scroll position.
+- **Fix**: Added scroll-intent detection via `NotificationListener<UserScrollNotification>` to track when the user drags upward (`ScrollDirection.forward`). When detected, auto-scroll is paused until the user explicitly returns to the bottom.
+
+### 3. **No resume when user returns to the bottom**
+
+- **Issue**: Once auto-scroll was paused due to manual scroll-away, there was no way to re-engage it when the user scrolled back down.
+- **Fix**: Implemented `_checkIfReturnedToBottom()` which monitors scroll position on every `ScrollUpdateNotification` and `ScrollEndNotification`. When the user's scroll offset is within 20 pixels of the bottom, auto-scroll is automatically re-enabled.
+
+### 4. **Library's conflicting auto-scroll behavior**
+
+- **Issue**: `ChatAnimatedList`'s default `shouldScrollToEndWhenAtBottom: true` interfered with custom per-chunk scroll logic, causing unpredictable scroll conflicts.
+- **Fix**: Disabled the library's built-in auto-scroll (`shouldScrollToEndWhenAtBottom: false`) and delegated full scroll control to `ChatAutoScrollManager`, ensuring a single, clear scroll strategy throughout the stream lifecycle.
+
+## Solution Architecture
+
+- **New file**: `lib/chat_auto_scroll_manager.dart` — Context-free, testable scroll manager that owns all auto-scroll state and decisions.
+- **Modified**: `lib/gemini_chat_screen.dart` — Wired the manager into the stream lifecycle (start, per-chunk, completion/error) and wrapped the chat list in a `NotificationListener` for user-intent detection.
