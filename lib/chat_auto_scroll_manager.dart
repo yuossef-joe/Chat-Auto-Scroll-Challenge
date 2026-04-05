@@ -17,6 +17,9 @@ class ChatAutoScrollManager {
 
   static const double _bottomThreshold = 20.0;
 
+  /// Whether the user has manually scrolled away from the bottom.
+  bool get isUserScrolledAway => _userHasScrolledAway;
+
   ChatAutoScrollManager({
     required this.scrollController,
     this.topAndBottomChromeHeight = 168,

@@ -287,6 +287,7 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
       // Scroll to show the newly inserted streaming message since we
       // disabled the library's shouldScrollToEndWhenAtBottom.
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_autoScrollManager.isUserScrolledAway) return;
         if (!_scrollController.hasClients || !mounted) return;
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
