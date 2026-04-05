@@ -15,6 +15,9 @@ class ChatAutoScrollManager {
   // ---- user-intent state ----
   bool _userHasScrolledAway = false;
 
+  /// True only while the user is physically dragging / flinging the list.
+  bool _isUserScrolling = false;
+
   static const double _bottomThreshold = 20.0;
 
   /// Whether the user has manually scrolled away from the bottom.
@@ -25,6 +28,36 @@ class ChatAutoScrollManager {
     this.topAndBottomChromeHeight = 168,
     required this.bottomSafeArea,
   });
+
+  // ---------------------------------------------------------------
+  // Scroll-position save / restore
+  // ---------------------------------------------------------------
+
+  /// Save the current scroll offset so it can be restored after a message
+  /// insert that we don't want the user to see (they are scrolled away).
+  double? saveOffset() {
+    if (!scrollController.hasClients) return null;
+    return scrollController.offset;
+  }
+
+  /// Restore scroll position in the next frame. Call this inside a
+  /// `postFrameCallback` after a message insert when the user was scrolled
+  /// away.  The [previousOffset] is the value returned by [saveOffset].
+  void restoreOffset(double previousOffset) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!scrollController.hasClients) return;
+      // Clamp to the new maxScrollExtent (the list grew, so max is bigger).
+      final clamped = previousOffset.clamp(
+        scrollController.position.minScrollExtent,
+        scrollController.position.maxScrollExtent,
+      );
+      scrollController.jumpTo(clamped);
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // Streaming helpers
+  // ---------------------------------------------------------------
 
   void onStreamStarted(String streamId) {
     _reachedTargetScroll[streamId] = false;
@@ -75,15 +108,28 @@ class ChatAutoScrollManager {
     _reachedTargetScroll.remove(streamId);
   }
 
+  // ---------------------------------------------------------------
+  // Scroll notifications
+  // ---------------------------------------------------------------
+
   bool handleScrollNotification(Notification notification) {
     if (notification is UserScrollNotification) {
       if (notification.direction == ScrollDirection.forward) {
         _userHasScrolledAway = true;
+        _isUserScrolling = true;
+      } else if (notification.direction == ScrollDirection.idle) {
+        _isUserScrolling = false;
+      } else {
+        // ScrollDirection.reverse  (scrolling toward bottom)
+        _isUserScrolling = true;
       }
     }
 
-    if (notification is ScrollUpdateNotification ||
-        notification is ScrollEndNotification) {
+    // Only check "returned to bottom" during an actual user-initiated scroll,
+    // never during a programmatic animateTo / jumpTo.
+    if (_isUserScrolling &&
+        (notification is ScrollUpdateNotification ||
+            notification is ScrollEndNotification)) {
       _checkIfReturnedToBottom();
     }
 

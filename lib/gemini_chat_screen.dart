@@ -227,6 +227,10 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
   }
 
   void _handleMessageSend(String text) async {
+    // Capture scroll state BEFORE inserting the message.
+    final wasScrolledAway = _autoScrollManager.isUserScrolledAway;
+    final savedOffset = _autoScrollManager.saveOffset();
+
     await _chatController.insertMessage(
       TextMessage(
         id: _uuid.v4(),
@@ -236,6 +240,12 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
         metadata: isOnlyEmoji(text) ? {'isOnlyEmoji': true} : null,
       ),
     );
+
+    // If the user was reading older messages, jump back to where they were
+    // so the view doesn't shift to the newly inserted message.
+    if (wasScrolledAway && savedOffset != null) {
+      _autoScrollManager.restoreOffset(savedOffset);
+    }
 
     _sendContent(Content.text(text));
   }
@@ -275,6 +285,9 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
       if (messageInserted || !mounted) return;
       messageInserted = true;
 
+      final wasScrolledAway = _autoScrollManager.isUserScrolledAway;
+      final savedOffset = _autoScrollManager.saveOffset();
+
       streamMessage = TextStreamMessage(
         id: streamId,
         authorId: _agent.id,
@@ -285,16 +298,23 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
       _streamManager.startStream(streamId, streamMessage!);
       _autoScrollManager.onStreamStarted(streamId);
 
-      // Scroll to show the newly inserted streaming message since we
-      // disabled the library's shouldScrollToEndWhenAtBottom.
+      // If the user was reading older messages, restore their position.
+      // Otherwise scroll to show the newly inserted streaming message.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_autoScrollManager.isUserScrolledAway) return;
         if (!_scrollController.hasClients || !mounted) return;
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.linearToEaseOut,
-        );
+        if (wasScrolledAway && savedOffset != null) {
+          final clamped = savedOffset.clamp(
+            _scrollController.position.minScrollExtent,
+            _scrollController.position.maxScrollExtent,
+          );
+          _scrollController.jumpTo(clamped);
+        } else {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.linearToEaseOut,
+          );
+        }
       });
     }
 
