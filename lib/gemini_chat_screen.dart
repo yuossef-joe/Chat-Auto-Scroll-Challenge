@@ -141,6 +141,7 @@ class _GeminiChatScreenState extends State<GeminiChatScreen> {
                   scrollController: _scrollController,
                   itemBuilder: itemBuilder,
                   shouldScrollToEndWhenAtBottom: false,
+                  shouldScrollToEndWhenSendingMessage: false,
                 ),
               );
             },
